@@ -26,18 +26,36 @@ import com.google.android.material.navigation.NavigationView
 import com.google.android.material.tabs.TabLayout
 import com.google.android.material.tabs.TabLayoutMediator
 
-// Фрагмент с переключением доходов/расходов
+/**
+ * Главный фрагмент после авторизации, отображающий две вкладки:
+ * - Доходы ([IncomesFragment])
+ * - Расходы ([ExpensesFragment])
+ *
+ * Также реализует навигационное меню с возможностью:
+ * - Изменить почту или пароль
+ * - Сменить язык или валюту
+ * - Выйти из аккаунта
+ * - Перейти в профиль пользователя
+ *
+ * Используется внутри [MainActivity].
+ */
 class TabFragment : Fragment(), OnBackButtonListener {
 
+    /**
+     * Отображает фрагмент, настраивает ViewPager, TabLayout и Navigation Drawer.
+     *
+     * @return View интерфейса вкладочного фрагмента.
+     */
     @SuppressLint("SetTextI18n", "NotifyDataSetChanged")
     override fun onCreateView(
-        inflater: LayoutInflater, container: ViewGroup?,
+        inflater: LayoutInflater,
+        container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
         val view = inflater.inflate(R.layout.fragment_tab, container, false)
         val mainActivity = activity as MainActivity
 
-        // Получение виджетов
+        // Инициализация элементов
         val viewPager = view.findViewById<ViewPager2>(R.id.view_pager)
         val tabLayout = view.findViewById<TabLayout>(R.id.tab_layout)
         val toolbar = view.findViewById<MaterialToolbar>(R.id.toolbar)
@@ -46,71 +64,62 @@ class TabFragment : Fragment(), OnBackButtonListener {
         val nameTxt = navigationView.getHeaderView(0).findViewById<TextView>(R.id.name_txt)
         val emailTxt = navigationView.getHeaderView(0).findViewById<TextView>(R.id.email_txt)
 
-        // Нажатие на кнопку "Меню"
+        // Открытие бокового меню
         toolbar.setNavigationOnClickListener {
             drawerLayout.openDrawer(GravityCompat.START)
         }
-        // Инициализация адаптера для переключателя
+
+        // Установка адаптера для ViewPager
         val viewPagerAdapter = ViewPagerAdapter(this)
         viewPager.adapter = viewPagerAdapter
 
+        // Настройка заголовков вкладок
+        TabLayoutMediator(tabLayout, viewPager) { tab, position ->
+            tab.text = when (position) {
+                0 -> getString(R.string.incomes)
+                1 -> getString(R.string.expenses)
+                else -> ""
+            }
+        }.attach()
+
+        // Данные пользователя
+        nameTxt.text = "${mainActivity.user.name} ${mainActivity.user.surname}"
+        emailTxt.text = mainActivity.user.email
+
+        // Обработка нажатий в боковом меню
         navigationView.setNavigationItemSelectedListener {
             when (it.itemId) {
                 R.id.change_email -> mainActivity.setFragment(VerifyPasswordFragment(Constants.CHANGE_EMAIl))
                 R.id.change_password -> mainActivity.setFragment(VerifyPasswordFragment(Constants.CHANGE_PASSWORD))
-                // Выход из аккаунта
                 R.id.sign_out -> {
-                    val intent = Intent(mainActivity, StartingActivity::class.java)
-                    val tmpUser = User()
-                    tmpUser.id = -1
-                    tmpUser.name = ""
-                    tmpUser.surname = ""
-                    tmpUser.email = ""
-                    mainActivity.myPreference.setUser(tmpUser)
-                    startActivity(intent)
+                    mainActivity.myPreference.setUser(User().apply { id = -1 })
+                    startActivity(Intent(mainActivity, StartingActivity::class.java))
                     mainActivity.finish()
                 }
-                R.id.currency ->{
+                R.id.currency -> {
                     mainActivity.curr = "₽"
                     mainActivity.ue = 1
-                    val viewPagerAdapter = ViewPagerAdapter(this)
-                    viewPager.adapter = viewPagerAdapter
-
+                    viewPager.adapter = ViewPagerAdapter(this)
                 }
-
-                R.id.language ->{
-                    val dialog = LanguageDialog()
-                    dialog.show(parentFragmentManager, "language")
+                R.id.language -> {
+                    LanguageDialog().show(parentFragmentManager, "language")
                 }
-
             }
             true
         }
 
-        nameTxt.text = mainActivity.user.name+' '+mainActivity.user.surname
-        emailTxt.text = mainActivity.user.email
-        // Переход на фрагмент аккаунта
+        // Переход в аккаунт по нажатию на хедер
         navigationView.getHeaderView(0).setOnClickListener {
             mainActivity.setFragment(AccountFragment())
         }
 
-
-
-        // Заголовки переключателя
-        val tabLayoutMediator = TabLayoutMediator(tabLayout, viewPager) { tab: TabLayout.Tab, position: Int ->
-            when (position) {
-                0 -> tab.text = getString(R.string.incomes)
-                1 -> tab.text = getString(R.string.expenses)
-            }
-        }
-        tabLayoutMediator.attach()
-
-
         return view
     }
 
+    /**
+     * Обработка кнопки "Назад" — фрагмент не закрывается.
+     */
     override fun onBackPressed(): Boolean {
         return true
     }
-
 }

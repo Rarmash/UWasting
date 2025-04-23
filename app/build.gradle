@@ -31,6 +31,12 @@ android {
     kotlinOptions {
         jvmTarget = '1.8'
     }
+
+    apply plugin: 'org.jetbrains.dokka'
+
+    dokkaHtml {
+        outputDirectory.set(file("$buildDir/dokka"))
+    }
 }
 
 dependencies {

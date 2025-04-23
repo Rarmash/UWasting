@@ -18,34 +18,53 @@ import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory
 import retrofit2.converter.gson.GsonConverterFactory
 
 
+/**
+ * Начальная активность приложения UWasting.
+ * Проверяет, авторизован ли пользователь, и перенаправляет на главный экран или отображает экран авторизации.
+ */
 class StartingActivity : AppCompatActivity() {
 
+    /** Объект пользователя, полученный из локального хранилища */
     var user: User = User()
-    lateinit var myPreference:MyPreference
+
+    /** Класс для доступа к сохранённым пользовательским настройкам */
+    lateinit var myPreference: MyPreference
+
+    /** Интерфейс для работы с серверным API */
     lateinit var uwastingApi: UWastingApi
 
+    /**
+     * Метод инициализации активности.
+     * Настраивает API, загружает пользователя и выбирает стартовый экран.
+     * Если пользователь уже авторизован, происходит переход в [MainActivity].
+     */
     override fun onCreate(savedInstanceState: Bundle?) {
-
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_start)
+
         configureRetrofit()
-        //setContentView(R.layout.activity_start)
+
         myPreference = MyPreference(this)
         user = myPreference.getUser()
-        if (user.id!=-1){
+
+        // Если пользователь авторизован — сразу переходим в MainActivity
+        if (user.id != -1) {
             startActivity(Intent(this, MainActivity::class.java))
             finish()
         }
 
+        // Иначе — показываем фрагмент начала (вход/регистрация)
         setFragment(StartFragment())
-
-
     }
 
-    // Натсройка подключения к серверу
+    /**
+     * Настраивает подключение к серверу через Retrofit.
+     * Добавляет логирование всех HTTP-запросов.
+     */
     private fun configureRetrofit() {
-        val httpLoggingInterceptor = HttpLoggingInterceptor()
-        httpLoggingInterceptor.level = HttpLoggingInterceptor.Level.BODY
+        val httpLoggingInterceptor = HttpLoggingInterceptor().apply {
+            level = HttpLoggingInterceptor.Level.BODY
+        }
 
         val okHttpClient = OkHttpClient.Builder()
             .addInterceptor(httpLoggingInterceptor)
@@ -59,36 +78,39 @@ class StartingActivity : AppCompatActivity() {
             .build()
 
         uwastingApi = retrofit.create(UWastingApi::class.java)
-
     }
 
-    // Переключение фрагмента
+    /**
+     * Загружает указанный фрагмент в контейнер.
+     *
+     * @param fragment Фрагмент для отображения.
+     */
     fun setFragment(fragment: Fragment) {
-
-        supportFragmentManager.beginTransaction().replace(R.id.fragment_container, fragment).
-        addToBackStack(fragment.tag).commit()
-
+        supportFragmentManager.beginTransaction()
+            .replace(R.id.fragment_container, fragment)
+            .addToBackStack(fragment.tag)
+            .commit()
     }
 
-    // Предыдущий фрагмент
+    /**
+     * Возвращает предыдущий фрагмент из стека навигации.
+     */
     fun prevFragment() {
         supportFragmentManager.popBackStack()
     }
 
+    /**
+     * Обрабатывает нажатие кнопки "Назад".
+     * Делегирует действие текущему фрагменту, если он реализует [OnBackButtonListener].
+     */
     override fun onBackPressed() {
         val backStackCount = supportFragmentManager.backStackEntryCount
 
-        // Находим текущий Фрагмент и вызваем его метод: onBackPressed()
-
-        // Находим текущий Фрагмент и вызваем его метод: onBackPressed()
         if (backStackCount > 0) {
             val currentFragment = supportFragmentManager.findFragmentById(R.id.fragment_container)
             if (currentFragment is OnBackButtonListener) {
                 val actionResult = currentFragment.onBackPressed()
-
-                if (actionResult) {
-                    return
-                }
+                if (actionResult) return
             }
         }
 

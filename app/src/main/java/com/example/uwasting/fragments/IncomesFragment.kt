@@ -55,19 +55,39 @@ const val CREATE_FILE_EXPENSES = 112
 interface UpdateFragment{
     fun update()
 }
-// Фрагмент с доходами
+/**
+ * Фрагмент, отображающий информацию о доходах пользователя.
+ *
+ * Содержит:
+ * - список категорий доходов с количеством и суммами;
+ * - круговую диаграмму;
+ * - расчёт баланса с учётом инфляции (на основе данных StatBureau);
+ * - экспорт данных в CSV;
+ * - выбор временного периода анализа.
+ */
 class IncomesFragment : Fragment(), OnItemClickListener, UpdateFragment {
+
     private lateinit var pieChart: PieChart
-    private lateinit var totalIncomesTxt:TextView
-    private lateinit var recyclerView:RecyclerView
+    private lateinit var totalIncomesTxt: TextView
+    private lateinit var recyclerView: RecyclerView
     private lateinit var dateTxt: TextView
-    private lateinit var balanceView:TextView
+    private lateinit var balanceView: TextView
     private lateinit var mainActivity: MainActivity
     private lateinit var statBureauApi: StatBureauApi
     private var compositeDisposable = CompositeDisposable()
-    override fun onItemClicked(item: Triple<Category, Int, Int>){
+
+    /**
+     * Обработка нажатия на элемент категории.
+     * Переход к [CategoryFragment] с операциями данной категории доходов.
+     */
+    override fun onItemClicked(item: Triple<Category, Int, Int>) {
         mainActivity.setFragment(CategoryFragment(item.first, true))
     }
+
+    /**
+     * Настройка и выполнение запроса к [StatBureauApi] для получения текущей инфляции.
+     * Используется для корректного расчёта реального баланса.
+     */
     @SuppressLint("SetTextI18n")
     private fun configureRetrofit() {
         val httpLoggingInterceptor = HttpLoggingInterceptor()
@@ -85,67 +105,88 @@ class IncomesFragment : Fragment(), OnItemClickListener, UpdateFragment {
             .build()
 
         statBureauApi = retrofit.create(StatBureauApi::class.java)
-        statBureauApi.getIndex("russia")
 
-        statBureauApi.let {
-            compositeDisposable.add(statBureauApi.getIndex("russia")
+        compositeDisposable.add(
+            statBureauApi.getIndex("russia")
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
-                .subscribe({
-                    mainActivity.index = it[0].inflationRate
-                    val sumIncomes = mainActivity.currentOperations.getTotalSumIncomes()
-                    val sumExpenses = mainActivity.currentOperations.getTotalSumExpenses()
-                    val balance = (sumIncomes + sumExpenses) / (((mainActivity.index + 100) / 100).pow(mainActivity.period / 30))
-
-                    balanceView.text = mainActivity.getString(R.string.balance) + " " + String.format("%.2f", balance/mainActivity.ue)+mainActivity.curr
+                .subscribe({ result ->
+                    mainActivity.index = result[0].inflationRate
+                    updateBalance()
                 }, {
-                }))
-        }
+                    // Ошибка загрузки индекса инфляции — можно логировать
+                })
+        )
     }
 
+    /**
+     * Обновление визуального интерфейса доходов.
+     * Включает диаграмму, список категорий, расчёт баланса.
+     */
     @SuppressLint("SetTextI18n")
-    fun updateOperations(){
+    fun updateOperations() {
+        val sumIncomes = mainActivity.currentOperations.getTotalSumIncomes()
 
-        totalIncomesTxt.text = '+' + (round(mainActivity.currentOperations.getTotalSumIncomes().toFloat()/mainActivity.ue*100) /100.0).toString()+mainActivity.curr
-        //Список с категориями
+        totalIncomesTxt.text = "+${round(sumIncomes.toFloat() / mainActivity.ue * 100) / 100.0}${mainActivity.curr}"
+
         recyclerView.layoutManager = LinearLayoutManager(mainActivity)
-        recyclerView.adapter = CategoryRecyclerView(mainActivity.currentOperations.combineByCategoryIncomes(), this, mainActivity)
+        recyclerView.adapter = CategoryRecyclerView(
+            mainActivity.currentOperations.combineByCategoryIncomes(),
+            this,
+            mainActivity
+        )
 
-        //Диаграмма
         loadPieChartData()
+        updateBalance()
+    }
 
+    /**
+     * Пересчёт и обновление баланса с учётом инфляции.
+     */
+    private fun updateBalance() {
         val sumIncomes = mainActivity.currentOperations.getTotalSumIncomes()
         val sumExpenses = mainActivity.currentOperations.getTotalSumExpenses()
-        val balance = (sumIncomes + sumExpenses) / (((mainActivity.index + 100) / 100).pow(mainActivity.period / 30))
+        val inflationFactor = ((mainActivity.index + 100) / 100).pow(mainActivity.period / 30)
+        val balance = (sumIncomes + sumExpenses) / inflationFactor
 
-        balanceView.text = mainActivity.getString(R.string.balance) + " " + String.format("%.2f", balance/mainActivity.ue)+mainActivity.curr
-
+        balanceView.text = getString(R.string.balance) + " " +
+                String.format("%.2f", balance / mainActivity.ue) + mainActivity.curr
     }
+
+    /**
+     * Основной метод создания представления фрагмента.
+     * Выполняет инициализацию UI и настройку событий.
+     */
     @RequiresApi(Build.VERSION_CODES.O)
     @SuppressLint("SetTextI18n", "SdCardPath")
     override fun onCreateView(
-        inflater: LayoutInflater, container: ViewGroup?,
+        inflater: LayoutInflater,
+        container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
         mainActivity = activity as MainActivity
         val view = inflater.inflate(R.layout.fragment_incomes, container, false)
-        if (mainActivity.index==0f)configureRetrofit()
+
+        if (mainActivity.index == 0f) configureRetrofit()
+
+        // Инициализация виджетов
         totalIncomesTxt = view.findViewById(R.id.sum_txt)
         val exportToCSVBtn = view.findViewById<Button>(R.id.export_btn)
         val periodLayout = view.findViewById<ConstraintLayout>(R.id.period_layout)
         val addIncomeBtn = view.findViewById<MaterialButton>(R.id.add_income_btn)
         balanceView = view.findViewById(R.id.balance_inc)
         dateTxt = view.findViewById(R.id.date_txt)
-        dateTxt.text = getString(R.string.last) + " " + mainActivity.period + " " + getString(R.string.days)
         recyclerView = view.findViewById(R.id.categories_list)
         pieChart = view.findViewById(R.id.diagram_incomes)
+
+        dateTxt.text = getString(R.string.last) + " ${mainActivity.period} " + getString(R.string.days)
+
         setupPieChart()
         updateOperations()
 
-        // Нажатие на период
+        // События
         periodLayout.setOnClickListener {
-            val dialog = PeriodDialog(mainActivity, this)
-            dialog.show(parentFragmentManager, "period")
+            PeriodDialog(mainActivity, this).show(parentFragmentManager, "period")
         }
 
         addIncomeBtn.setOnClickListener {
@@ -153,7 +194,6 @@ class IncomesFragment : Fragment(), OnItemClickListener, UpdateFragment {
         }
 
         exportToCSVBtn.setOnClickListener {
-
             val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
                 addCategory(Intent.CATEGORY_OPENABLE)
                 type = "text/csv"
@@ -165,45 +205,50 @@ class IncomesFragment : Fragment(), OnItemClickListener, UpdateFragment {
         return view
     }
 
-    // Настройка отображения диаграммы
+    /**
+     * Настраивает внешний вид круговой диаграммы.
+     */
     private fun setupPieChart() {
         pieChart.isDrawHoleEnabled = false
         pieChart.setUsePercentValues(true)
-
         pieChart.setDrawEntryLabels(false)
         pieChart.centerText = ""
         pieChart.description.isEnabled = false
 
-        val legend = pieChart.legend
-        legend.verticalAlignment = Legend.LegendVerticalAlignment.TOP
-        legend.horizontalAlignment = Legend.LegendHorizontalAlignment.RIGHT
-        legend.orientation = Legend.LegendOrientation.VERTICAL
-        legend.setDrawInside(false)
-        legend.isEnabled = false
+        pieChart.legend.apply {
+            verticalAlignment = Legend.LegendVerticalAlignment.TOP
+            horizontalAlignment = Legend.LegendHorizontalAlignment.RIGHT
+            orientation = Legend.LegendOrientation.VERTICAL
+            setDrawInside(false)
+            isEnabled = false
+        }
     }
 
-    // Загрузка информации в диаграмму
-    private fun loadPieChartData(){
-        val entries = ArrayList<PieEntry>()
+    /**
+     * Загружает данные по доходам в круговую диаграмму.
+     */
+    private fun loadPieChartData() {
         val operations = mainActivity.currentOperations.combineByCategoryIncomes()
-
+        val entries = ArrayList<PieEntry>()
         val colors = ArrayList<Int>()
-        for(i in operations) {
+
+        for (i in operations) {
             entries.add(PieEntry(i.third.toFloat(), i.first.name))
             colors.add(i.first.color)
         }
 
-        val dataSet = PieDataSet(entries, "")
-        dataSet.colors = colors
-
-        val data = PieData(dataSet)
-        data.setDrawValues(false)
+        val dataSet = PieDataSet(entries, "").apply { this.colors = colors }
+        val data = PieData(dataSet).apply { setDrawValues(false) }
 
         pieChart.data = data
         pieChart.invalidate()
         pieChart.animateY(1000, Easing.EaseInOutQuad)
     }
 
+    /**
+     * Вызывается при обновлении периода анализа.
+     * Обновляет интерфейс и данные.
+     */
     @SuppressLint("SetTextI18n")
     override fun update() {
         dateTxt.text = "Последние ${mainActivity.period} дней"

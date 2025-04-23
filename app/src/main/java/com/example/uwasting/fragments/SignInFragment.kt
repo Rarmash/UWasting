@@ -21,38 +21,50 @@ import io.reactivex.android.schedulers.AndroidSchedulers
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.schedulers.Schedulers
 
-
+/**
+ * Фрагмент входа в приложение (авторизация).
+ *
+ * Пользователь вводит email и пароль. При успешной авторизации данные пользователя сохраняются
+ * в [MyPreference], и происходит переход в основное окно приложения ([MainActivity]).
+ *
+ * Используется в [StartingActivity].
+ */
 class SignInFragment : Fragment() {
 
+    /** Коллекция подписок RxJava для сетевых операций */
     private val compositeDisposable = CompositeDisposable()
 
-
+    /**
+     * Создание интерфейса фрагмента и настройка обработки событий.
+     *
+     * @return View фрагмента.
+     */
     override fun onCreateView(
-        inflater: LayoutInflater, container: ViewGroup?,
+        inflater: LayoutInflater,
+        container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
         val view = inflater.inflate(R.layout.fragment_sign_in, container, false)
         val startingActivity = activity as StartingActivity
+
+        // Элементы интерфейса
         val toolbar = view.findViewById<MaterialToolbar>(R.id.toolbar)
         val passwordEdit = view.findViewById<EditText>(R.id.pswrd_edit)
         val emailEdit = view.findViewById<EditText>(R.id.email_edit)
         val signInBtn = view.findViewById<Button>(R.id.sign_in_btn)
 
-        // Вход в приложении
+        // Обработка входа в систему
         signInBtn.setOnClickListener {
-            if ((passwordEdit.text.toString() contentEquals "") or (emailEdit.text.toString() contentEquals "")) {
-                val text = getString(R.string.field_is_empty)
-                val toast = Toast.makeText(startingActivity, text, Toast.LENGTH_LONG)
-                toast.show()
-            }
-            else {
-                startingActivity.user.password = passwordEdit.text.toString() // Получаем пароль
-                startingActivity.user.email = emailEdit.text.toString() // Получаем почту
-                tryGet(startingActivity.uwastingApi, startingActivity.user.email,
-                    startingActivity.user.password)
+            if (passwordEdit.text.toString().isBlank() || emailEdit.text.toString().isBlank()) {
+                Toast.makeText(startingActivity, getString(R.string.field_is_empty), Toast.LENGTH_LONG).show()
+            } else {
+                startingActivity.user.password = passwordEdit.text.toString()
+                startingActivity.user.email = emailEdit.text.toString()
+                tryGet(startingActivity.uwastingApi, emailEdit.text.toString(), passwordEdit.text.toString())
             }
         }
 
+        // Кнопка "Назад"
         toolbar.setNavigationOnClickListener {
             startingActivity.prevFragment()
         }
@@ -60,25 +72,32 @@ class SignInFragment : Fragment() {
         return view
     }
 
+    /**
+     * Попытка получить пользователя по введённым логину и паролю через API.
+     * При успехе сохраняет пользователя и запускает [MainActivity].
+     *
+     * @param uwastingApi Экземпляр API-клиента.
+     * @param email Электронная почта пользователя.
+     * @param password Пароль пользователя.
+     */
     private fun tryGet(uwastingApi: UWastingApi?, email: String, password: String) {
         val startingActivity = activity as StartingActivity
         uwastingApi?.let {
-            compositeDisposable.add(uwastingApi.getUserData(email, password)
-                .subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribe({
-                    //Сохранение пользователя
-                    startingActivity.myPreference.setUser(it)
+            compositeDisposable.add(
+                uwastingApi.getUserData(email, password)
+                    .subscribeOn(Schedulers.io())
+                    .observeOn(AndroidSchedulers.mainThread())
+                    .subscribe({ user ->
+                        // Сохраняем пользователя
+                        startingActivity.myPreference.setUser(user)
 
-                    //Переход в приложение
-                    startActivity(Intent(startingActivity, MainActivity::class.java))
-                    startingActivity.finish()
-                }, {
-                    val text = getString(R.string.user_not_found)
-                    val t = Toast.makeText(startingActivity, text, Toast.LENGTH_LONG)
-                    t.show()
-                }))
+                        // Переход в главное окно приложения
+                        startActivity(Intent(startingActivity, MainActivity::class.java))
+                        startingActivity.finish()
+                    }, {
+                        Toast.makeText(startingActivity, getString(R.string.user_not_found), Toast.LENGTH_LONG).show()
+                    })
+            )
         }
     }
-
 }

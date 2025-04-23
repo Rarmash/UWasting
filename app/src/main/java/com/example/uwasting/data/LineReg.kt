@@ -12,34 +12,61 @@ import java.util.*
 import kotlin.collections.ArrayList
 import kotlin.math.exp
 
-// Линейная регрессия
-class LineReg(private var expenses:ArrayList<Operation> ){
+/**
+ * Класс, реализующий линейную регрессию для анализа финансовых расходов пользователя.
+ *
+ * Используется для прогнозирования будущих трат на основе имеющихся данных.
+ *
+ * @param expenses Список операций пользователя (только расходы), по которым будет построена регрессионная модель.
+ */
+class LineReg(private var expenses: ArrayList<Operation>) {
+
+    /**
+     * Вычисляет прогнозируемую сумму расходов на следующие 30 дней на основе линейной регрессии.
+     *
+     * Для каждой даты вычисляется общая сумма расходов, затем на основе этих значений строится
+     * линейная модель при помощи библиотеки `kotlin-statistics`. После этого осуществляется предсказание
+     * значений на каждый из следующих 30 дней.
+     *
+     * @return Прогнозируемая сумма расходов за 30 дней.
+     *
+     * Возможные случаи:
+     * - Если данных нет — возвращается `0.0`
+     * - Если одна точка — прогнозируется как 30 * сумма
+     */
     @RequiresApi(Build.VERSION_CODES.O)
-    fun evaluateAlgorithm():Double {
+    fun evaluateAlgorithm(): Double {
+        val dateAmount: MutableMap<Long, Int> = mutableMapOf()
 
-        val dateAmount: MutableMap<Long,Int> =mutableMapOf()
-        for(i in expenses) {
-
-            val nowDay = i.date.toEpochDay()
-            if (!dateAmount.containsKey(nowDay)){
-                dateAmount[nowDay] = i.amount
-            }
-            else{
-                dateAmount[nowDay] = dateAmount[nowDay]!!+i.amount
-            }
+        // Группировка операций по дате
+        for (i in expenses) {
+            val day = i.date.toEpochDay()
+            dateAmount[day] = (dateAmount[day] ?: 0) + i.amount
         }
-        val tmp = ArrayList<Pair<Long,Int>>()
-        for (i in dateAmount) tmp.add(Pair(i.key, i.value))
-        if (tmp.size == 0)return 0.0
-        if (tmp.size == 1) return tmp[0].second.toDouble() * 30
-        val r = tmp.simpleRegression(
-            xSelector = { it.first},
-            ySelector = {it.second}
-        )
-        var sum = 0.0
-        for (i in 0..30)
 
-            sum+= r.predict((now()).toEpochDay().toDouble()+i)
+        // Преобразование в список пар (дата, сумма)
+        val tmp = ArrayList<Pair<Long, Int>>()
+        for (entry in dateAmount) {
+            tmp.add(Pair(entry.key, entry.value))
+        }
+
+        // Проверка на крайние случаи
+        if (tmp.isEmpty()) return 0.0
+        if (tmp.size == 1) return tmp[0].second.toDouble() * 30
+
+        // Построение модели линейной регрессии
+        val regression = tmp.simpleRegression(
+            xSelector = { it.first },
+            ySelector = { it.second }
+        )
+
+        // Прогноз на следующие 30 дней
+        var sum = 0.0
+        for (i in 0..30) {
+            val futureDay = LocalDate.now().toEpochDay().toDouble() + i
+            sum += regression.predict(futureDay)
+        }
+
         return sum
     }
 }

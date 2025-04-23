@@ -35,69 +35,93 @@ import java.nio.file.Paths
 import kotlin.math.abs
 import kotlin.math.round
 
-// Фрагмент с расходами
+/**
+ * Фрагмент, отображающий статистику расходов пользователя.
+ *
+ * Содержит:
+ * - диаграмму по категориям;
+ * - список категорий с суммами;
+ * - прогноз трат на основе линейной регрессии;
+ * - общую сумму расходов;
+ * - возможность экспорта в CSV;
+ * - выбор периода анализа.
+ */
 class ExpensesFragment : Fragment(), OnItemClickListener, UpdateFragment {
-    private lateinit var pieChart: PieChart
-    private lateinit var mainActivity:MainActivity
-    private lateinit var dateTxt:TextView
-    private lateinit var recyclerView:RecyclerView
-    private lateinit var totalExpensesTxt:TextView
-    private lateinit var forecastView:TextView
 
-    // Обновить операции
+    private lateinit var pieChart: PieChart
+    private lateinit var mainActivity: MainActivity
+    private lateinit var dateTxt: TextView
+    private lateinit var recyclerView: RecyclerView
+    private lateinit var totalExpensesTxt: TextView
+    private lateinit var forecastView: TextView
+
+    /**
+     * Обновляет список расходов, диаграмму и прогноз.
+     */
     @RequiresApi(Build.VERSION_CODES.O)
     @SuppressLint("SetTextI18n")
-    fun updateOperations(){
+    fun updateOperations() {
         loadPieChartData()
-        totalExpensesTxt.text = (round(mainActivity.currentOperations.getTotalSumExpenses().toFloat()/mainActivity.ue*100)/100.0).toString()+mainActivity.curr
-        val expenses = mainActivity.currentOperations.selectOperationsExpenses()
-        val expensesRight = ArrayList<Operation>()
-        for (i in expenses){
-            expensesRight.add(i)
-        }
 
-        val lineReg = LineReg(expensesRight)
-        val pred = lineReg.evaluateAlgorithm()
-        forecastView.text = mainActivity.getString(R.string.monthly_forecast)+": "+ String.format("%.2f", pred/mainActivity.ue)+mainActivity.curr
+        val total = mainActivity.currentOperations.getTotalSumExpenses()
+        totalExpensesTxt.text = "${round(total.toFloat() / mainActivity.ue * 100) / 100.0}${mainActivity.curr}"
+
+        val expenses = mainActivity.currentOperations.selectOperationsExpenses()
+        val lineReg = LineReg(ArrayList(expenses))
+        val prediction = lineReg.evaluateAlgorithm()
+
+        forecastView.text = getString(R.string.monthly_forecast) + ": " +
+                String.format("%.2f", prediction / mainActivity.ue) + mainActivity.curr
 
         recyclerView.layoutManager = LinearLayoutManager(mainActivity)
-        recyclerView.adapter = CategoryRecyclerView(mainActivity.currentOperations.combineByCategoryExpenses(), this, mainActivity)
+        recyclerView.adapter = CategoryRecyclerView(
+            mainActivity.currentOperations.combineByCategoryExpenses(),
+            this,
+            mainActivity
+        )
     }
 
+    /**
+     * Создаёт и возвращает представление фрагмента.
+     * Настраивает интерфейс и запускает начальное обновление данных.
+     */
     @RequiresApi(Build.VERSION_CODES.O)
     @SuppressLint("SetTextI18n")
     override fun onCreateView(
-        inflater: LayoutInflater, container: ViewGroup?,
+        inflater: LayoutInflater,
+        container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
         val view = inflater.inflate(R.layout.fragment_expenses, container, false)
         mainActivity = activity as MainActivity
 
-        // Получение виджетов
+        // Инициализация компонентов
         val exportToCSVBtn = view.findViewById<Button>(R.id.export_btn)
         val addExpenseBtn = view.findViewById<Button>(R.id.add_expense_btn)
         val periodLayout = view.findViewById<ConstraintLayout>(R.id.period_layout)
         recyclerView = view.findViewById(R.id.categories_list)
         dateTxt = view.findViewById(R.id.date_txt)
-        dateTxt.text = getString(R.string.last) + " " + mainActivity.period + " " + getString(R.string.days)
         totalExpensesTxt = view.findViewById(R.id.totalExpenses)
-        forecastView=view.findViewById(R.id.forecast)
+        forecastView = view.findViewById(R.id.forecast)
         pieChart = view.findViewById(R.id.diagram_expenses)
+
+        dateTxt.text = getString(R.string.last) + " ${mainActivity.period} " + getString(R.string.days)
+
         setupPieChart()
-        // Нажатие на период
+        updateOperations()
+
+        // Выбор периода анализа
         periodLayout.setOnClickListener {
             val dialog = PeriodDialog(mainActivity, this)
             dialog.show(parentFragmentManager, "period")
         }
 
-        updateOperations()
-
-        // Добавление расхода
+        // Добавление новой операции
         addExpenseBtn.setOnClickListener {
             mainActivity.setFragment(NewExpenseFragment())
         }
 
-        // Экспорт расходов в CSV файл
+        // Экспорт в CSV
         exportToCSVBtn.setOnClickListener {
             val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
                 addCategory(Intent.CATEGORY_OPENABLE)
@@ -110,53 +134,61 @@ class ExpensesFragment : Fragment(), OnItemClickListener, UpdateFragment {
         return view
     }
 
-    // Настройка диаграммы
+    /**
+     * Настраивает внешний вид круговой диаграммы.
+     */
     private fun setupPieChart() {
         pieChart.isDrawHoleEnabled = false
         pieChart.setUsePercentValues(true)
-
         pieChart.setDrawEntryLabels(false)
         pieChart.centerText = ""
         pieChart.description.isEnabled = false
 
-        val legend = pieChart.legend
-        legend.verticalAlignment = Legend.LegendVerticalAlignment.TOP
-        legend.horizontalAlignment = Legend.LegendHorizontalAlignment.RIGHT
-        legend.orientation = Legend.LegendOrientation.VERTICAL
-        legend.setDrawInside(false)
-        legend.isEnabled = false
+        pieChart.legend.apply {
+            verticalAlignment = Legend.LegendVerticalAlignment.TOP
+            horizontalAlignment = Legend.LegendHorizontalAlignment.RIGHT
+            orientation = Legend.LegendOrientation.VERTICAL
+            setDrawInside(false)
+            isEnabled = false
+        }
     }
 
-    // Загрузка данных в диаграмму
-    private fun loadPieChartData(){
-        val mainActivity = activity as MainActivity
-        val entries = ArrayList<PieEntry>()
+    /**
+     * Загружает данные расходов по категориям в круговую диаграмму.
+     */
+    private fun loadPieChartData() {
         val operations = mainActivity.currentOperations.combineByCategoryExpenses()
-
+        val entries = ArrayList<PieEntry>()
         val colors = ArrayList<Int>()
-        for(i in operations) {
-            entries.add(PieEntry(-i.third.toFloat(), i.first.name))
-            colors.add(i.first.color)
+
+        for (operation in operations) {
+            entries.add(PieEntry(-operation.third.toFloat(), operation.first.name))
+            colors.add(operation.first.color)
         }
 
-        val dataSet = PieDataSet(entries, "")
-        dataSet.colors = colors
+        val dataSet = PieDataSet(entries, "").apply {
+            this.colors = colors
+        }
 
-        val data = PieData(dataSet)
-        data.setDrawValues(false)
+        val data = PieData(dataSet).apply {
+            setDrawValues(false)
+        }
 
         pieChart.data = data
         pieChart.invalidate()
         pieChart.animateY(1000, Easing.EaseInOutQuad)
-
     }
 
-    // Нажатие на элемент списка категорий
+    /**
+     * Обработка нажатия на элемент категории — переход к [CategoryFragment].
+     */
     override fun onItemClicked(item: Triple<Category, Int, Int>) {
-        val mainActivity = activity as MainActivity
         mainActivity.setFragment(CategoryFragment(item.first, false))
     }
 
+    /**
+     * Обновляет интерфейс после изменения периода.
+     */
     @SuppressLint("SetTextI18n")
     override fun update() {
         dateTxt.text = "Последние ${mainActivity.period} дней"

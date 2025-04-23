@@ -25,113 +25,161 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.*
 
-
-// Фрагмент с добавлением расхода
+/**
+ * Фрагмент для добавления новой расходной операции.
+ *
+ * Содержит:
+ * - поле ввода суммы;
+ * - выбор категории;
+ * - выбор даты;
+ * - кнопку отправки;
+ * - валидацию ввода;
+ * - добавление операции через API.
+ */
 class NewExpenseFragment : Fragment(), SetCategory {
+
+    /**
+     * Текущая дата, используемая по умолчанию в выборе даты.
+     */
     @RequiresApi(Build.VERSION_CODES.O)
     val time: LocalDate = LocalDate.now()
-    @RequiresApi(Build.VERSION_CODES.O)
-    var myYear = time.year
-    @RequiresApi(Build.VERSION_CODES.O)
-    var myMonth = time.monthValue-1
-    @RequiresApi(Build.VERSION_CODES.O)
-    var myDay = time.dayOfMonth
-    lateinit var datetxt: TextInputEditText
-    lateinit var categoryEdit:TextInputEditText
-    var compositeDisposable = CompositeDisposable()
-    private var category:String =""
-    private var isSendingOperation = false
-    @RequiresApi(Build.VERSION_CODES.O)
-    fun sendOperation(amount:Int, category:String, date:String){
-        if (isSendingOperation) return
 
+    @RequiresApi(Build.VERSION_CODES.O) var myYear = time.year
+    @RequiresApi(Build.VERSION_CODES.O) var myMonth = time.monthValue - 1
+    @RequiresApi(Build.VERSION_CODES.O) var myDay = time.dayOfMonth
+
+    /** Поле ввода даты */
+    lateinit var datetxt: TextInputEditText
+
+    /** Поле ввода категории */
+    lateinit var categoryEdit: TextInputEditText
+
+    /** Контейнер подписок RxJava */
+    var compositeDisposable = CompositeDisposable()
+
+    /** Выбранная категория */
+    private var category: String = ""
+
+    /** Флаг блокировки повторной отправки */
+    private var isSendingOperation = false
+
+    /**
+     * Отправка расходной операции на сервер через [MainActivity.uwastingApi].
+     *
+     * @param amount Сумма расхода.
+     * @param category Категория.
+     * @param date Дата операции в формате "MM-dd-yyyy".
+     */
+    @RequiresApi(Build.VERSION_CODES.O)
+    fun sendOperation(amount: Int, category: String, date: String) {
+        if (isSendingOperation) return
         val mainActivity = activity as MainActivity
         isSendingOperation = true
-        mainActivity.uwastingApi.let {
-            compositeDisposable.add(mainActivity.uwastingApi.addOperation(-amount, category, date, mainActivity.user.id)
+
+        compositeDisposable.add(
+            mainActivity.uwastingApi.addOperation(-amount, category, date, mainActivity.user.id)
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe({
-                    if (it!=-1){
-                        mainActivity.totalOperations.addOperation(-amount, category, LocalDate.parse(date,
-                            DateTimeFormatter.ofPattern("MM-dd-yyyy", Locale.ENGLISH))  , it)
+                    if (it != -1) {
+                        mainActivity.totalOperations.addOperation(
+                            -amount,
+                            category,
+                            LocalDate.parse(date, DateTimeFormatter.ofPattern("MM-dd-yyyy", Locale.ENGLISH)),
+                            it
+                        )
                         mainActivity.updateCurrentOperations()
                         mainActivity.prevFragment()
-
                     }
                 }, {
-                    val text = getString(R.string.add_error)
-                    val toast = Toast.makeText(mainActivity, text, Toast.LENGTH_LONG)
-                    toast.show()
+                    Toast.makeText(mainActivity, getString(R.string.add_error), Toast.LENGTH_LONG).show()
                     isSendingOperation = false
-                }))
-        }
+                })
+        )
     }
 
+    /**
+     * Колбэк выбора даты в диалоге [DatePickerDialog].
+     * Устанавливает выбранную дату в поле `datetxt`.
+     */
     @SuppressLint("SetTextI18n", "SimpleDateFormat")
-    var myCallBack =
-        OnDateSetListener { view, year, monthOfYear, dayOfMonth ->
-            myYear = year
-            myMonth = monthOfYear
-            myDay = dayOfMonth
-            val format = SimpleDateFormat("MM-dd-yyyy")
-            val calendar: Calendar = Calendar.getInstance()
-            calendar.set(myYear, myMonth, myDay)
+    var myCallBack = DatePickerDialog.OnDateSetListener { _, year, monthOfYear, dayOfMonth ->
+        myYear = year
+        myMonth = monthOfYear
+        myDay = dayOfMonth
 
-            datetxt.setText(format.format(calendar.getTime()))
+        val format = SimpleDateFormat("MM-dd-yyyy", Locale.ENGLISH)
+        val calendar = Calendar.getInstance().apply {
+            set(myYear, myMonth, myDay)
         }
 
+        datetxt.setText(format.format(calendar.time))
+    }
+
+    /**
+     * Создание и отображение фрагмента.
+     * Настраивает поля, обработчики кнопок, выбор категории и даты.
+     */
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreateView(
-        inflater: LayoutInflater, container: ViewGroup?,
+        inflater: LayoutInflater,
+        container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
         val view = inflater.inflate(R.layout.fragment_new_expense, container, false)
         val mainActivity = activity as MainActivity
-        time.year
 
-        // Получение виджетов
+        // Получение элементов интерфейса
         val toolbar = view.findViewById<MaterialToolbar>(R.id.toolbar)
         categoryEdit = view.findViewById(R.id.category_edit)
         val addBtn = view.findViewById<Button>(R.id.add_btn)
         val amountTxt = view.findViewById<TextInputEditText>(R.id.sum_edit)
         datetxt = view.findViewById(R.id.cmsn_edit)
 
-        addBtn.setOnClickListener{
-            if (amountTxt.text.toString()!="" && categoryEdit.text.toString()!="" && datetxt.text.toString()!=""){
+        // Обработка кнопки "Добавить"
+        addBtn.setOnClickListener {
+            if (amountTxt.text.toString().isNotBlank()
+                && categoryEdit.text.toString().isNotBlank()
+                && datetxt.text.toString().isNotBlank()
+            ) {
                 sendOperation(amountTxt.text.toString().toInt(), categoryEdit.text.toString(), datetxt.text.toString())
-            }
-            else{
-                val text = getString(R.string.field_is_empty)
-                val toast = Toast.makeText(mainActivity, text, Toast.LENGTH_LONG)
-                toast.show()
+            } else {
+                Toast.makeText(mainActivity, getString(R.string.field_is_empty), Toast.LENGTH_LONG).show()
             }
         }
 
-        datetxt.setOnClickListener{
-            DatePickerDialog(mainActivity, myCallBack,myYear, myMonth,myDay).show()
-
+        // Открытие календаря при выборе даты
+        datetxt.setOnClickListener {
+            DatePickerDialog(mainActivity, myCallBack, myYear, myMonth, myDay).show()
         }
 
-        // Перемещение на предыдущий фрагмент
+        // Назад
         toolbar.setNavigationOnClickListener {
             mainActivity.prevFragment()
         }
 
         // Выбор категории
-        categoryEdit.setOnClickListener() {
+        categoryEdit.setOnClickListener {
             mainActivity.setFragment(SelectCategoryFragment(this, Constants.EXPENSES))
         }
+
         return view
     }
 
+    /**
+     * При возврате к фрагменту устанавливает сохранённую категорию в поле.
+     */
     override fun onResume() {
         super.onResume()
         categoryEdit.setText(category)
     }
 
+    /**
+     * Установка выбранной категории (через интерфейс [SetCategory]).
+     *
+     * @param category Название категории.
+     */
     override fun setCategory(category: String) {
         this.category = category
     }
-
 }

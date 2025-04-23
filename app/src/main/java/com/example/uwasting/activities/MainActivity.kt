@@ -34,36 +34,68 @@ import retrofit2.adapter.rxjava2.RxJava2CallAdapterFactory
 import retrofit2.converter.gson.GsonConverterFactory
 import java.time.LocalDate
 
-
-// Главная активность
+/**
+ * Главная активность приложения UWasting.
+ * Отвечает за инициализацию, работу с данными пользователя, переключение фрагментов и экспорт операций в CSV.
+ */
 @Suppress("DEPRECATION")
 class MainActivity : AppCompatActivity() {
-    lateinit var user:User
+
+    /** Авторизованный пользователь */
+    lateinit var user: User
+
+    /** Коллекция для управления подписками RxJava */
     private val compositeDisposable = CompositeDisposable()
+
+    /** Интерфейс для работы с серверным API */
     lateinit var uwastingApi: UWastingApi
+
+    /** Класс для работы с локальными настройками и предпочтениями */
     lateinit var myPreference: MyPreference
+
+    /** Все операции пользователя */
     lateinit var totalOperations: OperationsList
+
+    /** Операции за выбранный период */
     lateinit var currentOperations: OperationsList
+
+    /** Количество дней для анализа операций (например, 30 дней) */
     var period = 30
+
+    /** Текущая валюта (по умолчанию — рубль) */
     var curr = "₽"
+
+    /** Условная единица (используется при конвертации валют, если реализовано) */
     var ue = 1
+
+    /** Индекс текущей вкладки (для графиков или статистики) */
     var index = 0f
+
+    /**
+     * Переопределение базового контекста для поддержки локализации.
+     */
     override fun attachBaseContext(newBase: Context?) {
         myPreference = MyPreference(newBase!!)
         val lang = myPreference.getLanguage()
         super.attachBaseContext(MyContextWrapper.wrap(newBase, lang))
     }
-    // Обновление операций
+
+    /**
+     * Обновляет список текущих операций, отбирая их из общего списка по заданному периоду.
+     */
     @RequiresApi(Build.VERSION_CODES.O)
-    fun updateCurrentOperations(){
+    fun updateCurrentOperations() {
         currentOperations = OperationsList(ArrayList(totalOperations.selectOperations(period)))
     }
 
+    /**
+     * Обрабатывает результат выбора файла пользователем (экспорт в CSV).
+     */
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
 
-        if (requestCode != CREATE_FILE_INCOMES&&requestCode!= CREATE_FILE_EXPENSES || resultCode != RESULT_OK) return
+        if (requestCode != CREATE_FILE_INCOMES && requestCode != CREATE_FILE_EXPENSES || resultCode != RESULT_OK) return
 
         val operations = if (requestCode == CREATE_FILE_INCOMES) currentOperations.selectOperationsIncomes()
         else currentOperations.selectOperationsExpenses()
@@ -72,31 +104,27 @@ class MainActivity : AppCompatActivity() {
 
         if (selectedFile != null) {
             val writer = contentResolver.openOutputStream(selectedFile)?.bufferedWriter()
-            val csvPrinter = CSVPrinter(writer, CSVFormat.DEFAULT
-                .withHeader("OperationId", "Category", "Amount", "Date"))
+            val csvPrinter = CSVPrinter(writer, CSVFormat.DEFAULT.withHeader("OperationId", "Category", "Amount", "Date"))
 
             for (operation in operations) {
-                val operationData = listOf(
-                    operation.id,
-                    operation.category,
-                    operation.amount,
-                    operation.date)
-
+                val operationData = listOf(operation.id, operation.category, operation.amount, operation.date)
                 csvPrinter.printRecord(operationData)
             }
 
             csvPrinter.flush()
             csvPrinter.close()
 
-
             val intent = Intent(Intent.ACTION_VIEW)
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            intent.setDataAndType(selectedFile,"text/csv")
-            startActivity(Intent.createChooser(intent, "Open"));
+            intent.setDataAndType(selectedFile, "text/csv")
+            startActivity(Intent.createChooser(intent, "Open"))
         }
     }
 
-    // Получение операций пользователя
+    /**
+     * Загружает операции пользователя с сервера.
+     * В случае ошибки возвращает на экран авторизации.
+     */
     @RequiresApi(Build.VERSION_CODES.O)
     fun getOperations() {
         uwastingApi.let {
@@ -104,11 +132,11 @@ class MainActivity : AppCompatActivity() {
                 .subscribeOn(Schedulers.io())
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe({
-                    totalOperations=OperationsList(it)
+                    totalOperations = OperationsList(it)
                     updateCurrentOperations()
-
                     setFragment(TabFragment())
-                }, {user.id = -1
+                }, {
+                    user.id = -1
                     myPreference.setUser(user)
                     startActivity(Intent(this, StartingActivity::class.java))
                     finish()
@@ -116,6 +144,10 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Основной метод инициализации активности.
+     * Загружает пользователя, настраивает API и запускает загрузку операций.
+     */
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -124,22 +156,29 @@ class MainActivity : AppCompatActivity() {
         user = myPreference.getUser()
         configureRetrofit()
         getOperations()
-
     }
 
-    // Получение разрешения на создание файлов в памяти системы
+    /**
+     * Проверяет наличие разрешений (например, на запись в память).
+     *
+     * @param permission Разрешение, которое требуется проверить
+     * @param requestCode Код запроса разрешения
+     */
     fun checkPermission(permission: String, requestCode: Int) {
         if (ContextCompat.checkSelfPermission(this@MainActivity, permission) == PackageManager.PERMISSION_DENIED) {
             ActivityCompat.requestPermissions(this@MainActivity, arrayOf(permission), requestCode)
         }
     }
 
-    // Натсройка подключения к серверу
+    /**
+     * Настраивает подключение к серверу с помощью Retrofit.
+     */
     @RequiresApi(Build.VERSION_CODES.O)
     private fun configureRetrofit() {
         val gson = GsonBuilder().registerTypeAdapter(LocalDate::class.java, LocalDateDeserializer()).create()
-        val httpLoggingInterceptor = HttpLoggingInterceptor()
-        httpLoggingInterceptor.level = HttpLoggingInterceptor.Level.BODY
+        val httpLoggingInterceptor = HttpLoggingInterceptor().apply {
+            level = HttpLoggingInterceptor.Level.BODY
+        }
 
         val okHttpClient = OkHttpClient.Builder()
             .addInterceptor(httpLoggingInterceptor)
@@ -153,37 +192,40 @@ class MainActivity : AppCompatActivity() {
             .build()
 
         uwastingApi = retrofit.create(UWastingApi::class.java)
-
     }
 
-    // Переключение фрагмента
+    /**
+     * Заменяет текущий фрагмент на указанный.
+     *
+     * @param fragment Новый фрагмент для отображения
+     */
     fun setFragment(fragment: Fragment) {
-        supportFragmentManager.beginTransaction().replace(R.id.fragment_container, fragment).
-        addToBackStack(fragment.tag).commit()
+        supportFragmentManager.beginTransaction()
+            .replace(R.id.fragment_container, fragment)
+            .addToBackStack(fragment.tag)
+            .commit()
     }
 
-    // Предыдущий фрагмент
+    /**
+     * Возвращает предыдущий фрагмент из backstack.
+     */
     fun prevFragment() {
         supportFragmentManager.popBackStack()
     }
-    //Нажатие кнопки назад
+
+    /**
+     * Обработка нажатия кнопки "Назад".
+     * Передаёт событие текущему фрагменту, если он реализует [OnBackButtonListener].
+     */
     override fun onBackPressed() {
         val backStackCount = supportFragmentManager.backStackEntryCount
-
-        // Находим текущий Фрагмент и вызваем его метод: onBackPressed()
-
-        // Находим текущий Фрагмент и вызваем его метод: onBackPressed()
         if (backStackCount > 0) {
             val currentFragment = supportFragmentManager.findFragmentById(R.id.fragment_container)
             if (currentFragment is OnBackButtonListener) {
                 val actionResult = currentFragment.onBackPressed()
-
-                if (actionResult) {
-                    return
-                }
+                if (actionResult) return
             }
         }
-
         super.onBackPressed()
     }
 }

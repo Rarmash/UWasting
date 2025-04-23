@@ -5,24 +5,38 @@ import androidx.viewpager2.adapter.FragmentStateAdapter
 import com.example.uwasting.fragments.ExpensesFragment
 import com.example.uwasting.fragments.IncomesFragment
 
+/**
+ * Адаптер для ViewPager2, используемый для переключения между вкладками "Доходы" и "Расходы".
+ *
+ * @param fragment Родительский фрагмент, в котором расположен ViewPager2.
+ */
+class ViewPagerAdapter(fragment: Fragment) : FragmentStateAdapter(fragment) {
 
-// Адаптер для переключения между доходами/расходами
-class ViewPagerAdapter(fragment: Fragment): FragmentStateAdapter(fragment) {
+    /** Общее количество страниц (вкладок): Доходы и Расходы */
     private val numPages = 2
 
-    // Отображение текущего фрагмента
+    /**
+     * Возвращает фрагмент, соответствующий указанной позиции.
+     *
+     * @param position Индекс вкладки:
+     * - `0` — фрагмент с доходами [IncomesFragment]
+     * - `1` — фрагмент с расходами [ExpensesFragment]
+     * @return Соответствующий фрагмент.
+     */
     override fun createFragment(position: Int): Fragment {
-        when (position) {
-            0 -> return IncomesFragment()
-            1 -> return ExpensesFragment()
+        return when (position) {
+            0 -> IncomesFragment()
+            1 -> ExpensesFragment()
+            else -> IncomesFragment() // по умолчанию
         }
-        return IncomesFragment()
     }
 
-// Полчуение количества страниц
+    /**
+     * Возвращает количество вкладок.
+     *
+     * @return Общее число страниц (2).
+     */
     override fun getItemCount(): Int {
         return numPages
     }
-
-
 }
