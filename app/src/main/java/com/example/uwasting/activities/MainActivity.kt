@@ -8,8 +8,10 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
@@ -57,7 +59,7 @@ class MainActivity : AppCompatActivity() {
     lateinit var totalOperations: OperationsList
 
     /** Операции за выбранный период */
-    lateinit var currentOperations: OperationsList
+    var currentOperations: OperationsList? = null
 
     /** Количество дней для анализа операций (например, 30 дней) */
     var period = 30
@@ -97,8 +99,13 @@ class MainActivity : AppCompatActivity() {
 
         if (requestCode != CREATE_FILE_INCOMES && requestCode != CREATE_FILE_EXPENSES || resultCode != RESULT_OK) return
 
-        val operations = if (requestCode == CREATE_FILE_INCOMES) currentOperations.selectOperationsIncomes()
-        else currentOperations.selectOperationsExpenses()
+        if (currentOperations == null) {
+            Log.d("MainActivity", "currentOperations is not initialized")
+            return
+        }
+
+        val operations = if (requestCode == CREATE_FILE_INCOMES) currentOperations!!.selectOperationsIncomes()
+        else currentOperations?.selectOperationsExpenses()
 
         val selectedFile = data?.data
 
@@ -106,9 +113,11 @@ class MainActivity : AppCompatActivity() {
             val writer = contentResolver.openOutputStream(selectedFile)?.bufferedWriter()
             val csvPrinter = CSVPrinter(writer, CSVFormat.DEFAULT.withHeader("OperationId", "Category", "Amount", "Date"))
 
-            for (operation in operations) {
-                val operationData = listOf(operation.id, operation.category, operation.amount, operation.date)
-                csvPrinter.printRecord(operationData)
+            if (operations != null) {
+                for (operation in operations) {
+                    val operationData = listOf(operation.id, operation.category, operation.amount, operation.date)
+                    csvPrinter.printRecord(operationData)
+                }
             }
 
             csvPrinter.flush()
@@ -127,22 +136,24 @@ class MainActivity : AppCompatActivity() {
      */
     @RequiresApi(Build.VERSION_CODES.O)
     fun getOperations() {
-        uwastingApi.let {
-            compositeDisposable.add(uwastingApi.getOperations(user.id)
-                .subscribeOn(Schedulers.io())
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribe({
+        compositeDisposable.add(uwastingApi.getOperations(user.id)
+            .subscribeOn(Schedulers.io())
+            .observeOn(AndroidSchedulers.mainThread())
+            .subscribe({
+                if (!isDestroyed && !supportFragmentManager.isStateSaved) {
                     totalOperations = OperationsList(it)
                     updateCurrentOperations()
                     setFragment(TabFragment())
-                }, {
-                    user.id = -1
-                    myPreference.setUser(user)
-                    startActivity(Intent(this, StartingActivity::class.java))
-                    finish()
-                }))
-        }
+                }
+            }, {
+                // Ошибка - перейти на авторизацию
+                user.id = -1
+                myPreference.setUser(user)
+                startActivity(Intent(this, StartingActivity::class.java))
+                finish()
+            }))
     }
+
 
     /**
      * Основной метод инициализации активности.
@@ -153,6 +164,12 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         myPreference = MyPreference(this)
+        val themePref = myPreference.getTheme()
+        if (themePref == "dark") {
+            AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
+        } else {
+            AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
+        }
         user = myPreference.getUser()
         configureRetrofit()
         getOperations()
@@ -227,5 +244,10 @@ class MainActivity : AppCompatActivity() {
             }
         }
         super.onBackPressed()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        compositeDisposable.clear() // или .dispose()
     }
 }

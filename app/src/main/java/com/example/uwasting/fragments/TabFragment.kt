@@ -25,6 +25,7 @@ import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.navigation.NavigationView
 import com.google.android.material.tabs.TabLayout
 import com.google.android.material.tabs.TabLayoutMediator
+import androidx.appcompat.app.AppCompatDelegate
 
 /**
  * Главный фрагмент после авторизации, отображающий две вкладки:
@@ -92,7 +93,12 @@ class TabFragment : Fragment(), OnBackButtonListener {
                 R.id.change_email -> mainActivity.setFragment(VerifyPasswordFragment(Constants.CHANGE_EMAIl))
                 R.id.change_password -> mainActivity.setFragment(VerifyPasswordFragment(Constants.CHANGE_PASSWORD))
                 R.id.sign_out -> {
-                    mainActivity.myPreference.setUser(User().apply { id = -1 })
+                    mainActivity.myPreference.setUser(User().apply {
+                        id = -1
+                        name = ""
+                        surname = ""
+                        email = ""
+                    })
                     startActivity(Intent(mainActivity, StartingActivity::class.java))
                     mainActivity.finish()
                 }
@@ -100,6 +106,18 @@ class TabFragment : Fragment(), OnBackButtonListener {
                     mainActivity.curr = "₽"
                     mainActivity.ue = 1
                     viewPager.adapter = ViewPagerAdapter(this)
+                }
+                R.id.theme_toggle -> {
+                    val currentTheme = mainActivity.myPreference.getTheme()
+                    if (currentTheme == "light") {
+                        AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
+                        mainActivity.myPreference.setTheme("dark")
+                    } else {
+                        AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
+                        mainActivity.myPreference.setTheme("light")
+                    }
+                    // Перезапускаем активити, чтобы тема применились
+                    mainActivity.recreate()
                 }
                 R.id.language -> {
                     LanguageDialog().show(parentFragmentManager, "language")

@@ -63,10 +63,12 @@ class ExpensesFragment : Fragment(), OnItemClickListener, UpdateFragment {
     fun updateOperations() {
         loadPieChartData()
 
-        val total = mainActivity.currentOperations.getTotalSumExpenses()
-        totalExpensesTxt.text = "${round(total.toFloat() / mainActivity.ue * 100) / 100.0}${mainActivity.curr}"
+        val total = mainActivity.currentOperations?.getTotalSumExpenses()
+        if (total != null) {
+            totalExpensesTxt.text = "${round(total.toFloat() / mainActivity.ue * 100) / 100.0}${mainActivity.curr}"
+        }
 
-        val expenses = mainActivity.currentOperations.selectOperationsExpenses()
+        val expenses = mainActivity.currentOperations?.selectOperationsExpenses()
         val lineReg = LineReg(ArrayList(expenses))
         val prediction = lineReg.evaluateAlgorithm()
 
@@ -74,11 +76,13 @@ class ExpensesFragment : Fragment(), OnItemClickListener, UpdateFragment {
                 String.format("%.2f", prediction / mainActivity.ue) + mainActivity.curr
 
         recyclerView.layoutManager = LinearLayoutManager(mainActivity)
-        recyclerView.adapter = CategoryRecyclerView(
-            mainActivity.currentOperations.combineByCategoryExpenses(),
-            this,
-            mainActivity
-        )
+        recyclerView.adapter = mainActivity.currentOperations?.let {
+            CategoryRecyclerView(
+                it.combineByCategoryExpenses(),
+                this,
+                mainActivity
+            )
+        }
     }
 
     /**
@@ -157,13 +161,15 @@ class ExpensesFragment : Fragment(), OnItemClickListener, UpdateFragment {
      * Загружает данные расходов по категориям в круговую диаграмму.
      */
     private fun loadPieChartData() {
-        val operations = mainActivity.currentOperations.combineByCategoryExpenses()
+        val operations = mainActivity.currentOperations?.combineByCategoryExpenses()
         val entries = ArrayList<PieEntry>()
         val colors = ArrayList<Int>()
 
-        for (operation in operations) {
-            entries.add(PieEntry(-operation.third.toFloat(), operation.first.name))
-            colors.add(operation.first.color)
+        if (operations != null) {
+            for (operation in operations) {
+                entries.add(PieEntry(-operation.third.toFloat(), operation.first.name))
+                colors.add(operation.first.color)
+            }
         }
 
         val dataSet = PieDataSet(entries, "").apply {
@@ -189,6 +195,7 @@ class ExpensesFragment : Fragment(), OnItemClickListener, UpdateFragment {
     /**
      * Обновляет интерфейс после изменения периода.
      */
+    @RequiresApi(Build.VERSION_CODES.O)
     @SuppressLint("SetTextI18n")
     override fun update() {
         dateTxt.text = "Последние ${mainActivity.period} дней"

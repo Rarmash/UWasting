@@ -85,7 +85,7 @@ class CategoryFragment(
      * Устанавливает список операций для текущей категории, с учётом фильтра по доходам/расходам.
      */
     fun setListOperations() {
-        listOperations = mainActivity.currentOperations.selectByCategory(category)
+        listOperations = (mainActivity.currentOperations?.selectByCategory(category) ?: null)!!
         listOperations = if (income) {
             OperationsList(listOperations.selectOperationsIncomes())
         } else {
@@ -176,13 +176,15 @@ class CategoryFragment(
     override fun onItemClick(item: Triple<LocalDate, Category, Int>) {
         val mainActivity = activity as MainActivity
         val operationDialog = context?.let {
-            OperationDialog(
-                it,
-                mainActivity.currentOperations.findOperation(item.first, item.third, item.second),
-                item.third,
-                mainActivity,
-                this
-            )
+            mainActivity.currentOperations?.let { it1 ->
+                OperationDialog(
+                    it,
+                    it1.findOperation(item.first, item.third, item.second),
+                    item.third,
+                    mainActivity,
+                    this
+                )
+            }
         }
         operationDialog?.show()
     }

@@ -9,6 +9,9 @@ const val PREFERENCES_USER_NAME = "Username"
 const val PREFERENCES_USER_SURNAME = "UserSurname"
 const val PREFERENCES_USER_EMAIL = "UserEmail"
 const val PREFERENCES_USER_ID = "UserId"
+const private val PREFERENCES_THEME = "pref_theme"
+const private val THEME_LIGHT = "light"
+const private val THEME_DARK = "dark"
 
 /**
  * Класс-обёртка над `SharedPreferences`, используемый для хранения пользовательских настроек и данных.
@@ -68,5 +71,13 @@ class MyPreference(context: Context) {
         user.email = preference.getString(PREFERENCES_USER_EMAIL, "")!!
         user.id = preference.getInt(PREFERENCES_USER_ID, -1)
         return user
+    }
+
+    fun setTheme(theme: String) {
+        preference.edit().putString(PREFERENCES_THEME, theme).apply()
+    }
+
+    fun getTheme(): String {
+        return preference.getString(PREFERENCES_THEME, THEME_LIGHT) ?: THEME_LIGHT
     }
 }

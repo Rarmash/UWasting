@@ -125,16 +125,20 @@ class IncomesFragment : Fragment(), OnItemClickListener, UpdateFragment {
      */
     @SuppressLint("SetTextI18n")
     fun updateOperations() {
-        val sumIncomes = mainActivity.currentOperations.getTotalSumIncomes()
+        val sumIncomes = mainActivity.currentOperations?.getTotalSumIncomes()
 
-        totalIncomesTxt.text = "+${round(sumIncomes.toFloat() / mainActivity.ue * 100) / 100.0}${mainActivity.curr}"
+        if (sumIncomes != null) {
+            totalIncomesTxt.text = "+${round(sumIncomes.toFloat() / mainActivity.ue * 100) / 100.0}${mainActivity.curr}"
+        }
 
         recyclerView.layoutManager = LinearLayoutManager(mainActivity)
-        recyclerView.adapter = CategoryRecyclerView(
-            mainActivity.currentOperations.combineByCategoryIncomes(),
-            this,
-            mainActivity
-        )
+        recyclerView.adapter = mainActivity.currentOperations?.let {
+            CategoryRecyclerView(
+                it.combineByCategoryIncomes(),
+                this,
+                mainActivity
+            )
+        }
 
         loadPieChartData()
         updateBalance()
@@ -144,13 +148,15 @@ class IncomesFragment : Fragment(), OnItemClickListener, UpdateFragment {
      * Пересчёт и обновление баланса с учётом инфляции.
      */
     private fun updateBalance() {
-        val sumIncomes = mainActivity.currentOperations.getTotalSumIncomes()
-        val sumExpenses = mainActivity.currentOperations.getTotalSumExpenses()
+        val sumIncomes = mainActivity.currentOperations?.getTotalSumIncomes()
+        val sumExpenses = mainActivity.currentOperations?.getTotalSumExpenses()
         val inflationFactor = ((mainActivity.index + 100) / 100).pow(mainActivity.period / 30)
-        val balance = (sumIncomes + sumExpenses) / inflationFactor
+        val balance = (sumIncomes?.plus(sumExpenses!!))?.div(inflationFactor)
 
-        balanceView.text = getString(R.string.balance) + " " +
-                String.format("%.2f", balance / mainActivity.ue) + mainActivity.curr
+        if (balance != null) {
+            balanceView.text = getString(R.string.balance) + " " +
+                    String.format("%.2f", balance / mainActivity.ue) + mainActivity.curr
+        }
     }
 
     /**
@@ -228,13 +234,15 @@ class IncomesFragment : Fragment(), OnItemClickListener, UpdateFragment {
      * Загружает данные по доходам в круговую диаграмму.
      */
     private fun loadPieChartData() {
-        val operations = mainActivity.currentOperations.combineByCategoryIncomes()
+        val operations = mainActivity.currentOperations?.combineByCategoryIncomes()
         val entries = ArrayList<PieEntry>()
         val colors = ArrayList<Int>()
 
-        for (i in operations) {
-            entries.add(PieEntry(i.third.toFloat(), i.first.name))
-            colors.add(i.first.color)
+        if (operations != null) {
+            for (i in operations) {
+                entries.add(PieEntry(i.third.toFloat(), i.first.name))
+                colors.add(i.first.color)
+            }
         }
 
         val dataSet = PieDataSet(entries, "").apply { this.colors = colors }

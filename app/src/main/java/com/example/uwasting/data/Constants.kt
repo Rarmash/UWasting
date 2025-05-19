@@ -13,7 +13,7 @@ class Constants {
         const val CHANGE_PASSWORD = 1
 
         /** Базовый URL-адрес серверного API приложения UWasting */
-        const val APIUrl = "https://uwasting.herokuapp.com/"
+        const val APIUrl = "http://10.0.2.2:3000/"
 
         /** URL-адрес внешнего API сервиса StatBureau */
         const val StatBureauUrl = "https://www.statbureau.org/"
